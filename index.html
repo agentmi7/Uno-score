@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>UNO Live Scoreboard</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        :root { --uno-red: #e50914; --uno-dark: #222; }
+        body { font-family: 'Segoe UI', sans-serif; background: #f4f4f9; padding: 15px; text-align: center; margin: 0; }
+        .header { background: var(--uno-red); color: white; padding: 20px; margin: 0 0 20px 0; box-shadow: 0 2px 10px rgba(0,0,0,0.2); }
+        .match-card { background: white; border-radius: 15px; padding: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); margin: 0 auto 20px auto; max-width: 500px; }
+        .score-banner { display: flex; justify-content: space-around; background: var(--uno-dark); color: white; padding: 15px; border-radius: 10px; margin: 15px 0; }
+        .player h3 { color: #ffd700; margin: 0; font-size: 14px; text-transform: uppercase; }
+        .pts { font-size: 22px; font-weight: bold; }
+        table { width: 100%; border-collapse: collapse; font-size: 14px; }
+        th { background: #eee; padding: 8px; border-bottom: 2px solid var(--uno-red); }
+        td { padding: 10px; border-bottom: 1px solid #eee; }
+        #admin-panel { display: none; background: white; padding: 20px; border: 2px dashed var(--uno-red); border-radius: 15px; max-width: 500px; margin: 0 auto 20px auto; }
+        .btn { padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; color: white; }
+        .btn-add { background: #28a745; margin-top: 10px; width: 100%; }
+        input, select { padding: 10px; width: 100%; box-sizing: border-box; margin-bottom: 10px; border: 1px solid #ccc; border-radius: 5px; }
+        .win { color: #28a745; font-weight: bold; }
+        #status { font-size: 12px; color: #666; margin-bottom: 10px; }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <h1 style="margin:0">🏆 UNO WORLD CUP</h1>
+    </div>
+
+    <div id="status">Connecting to live server...</div>
+    <div onclick="login()" style="font-size:10px; opacity:0.2; cursor:pointer; margin-bottom:10px;">ADMIN LOGIN</div>
+
+    <div id="admin-panel">
+        <h3>Admin: Add Round</h3>
+        <select id="winner-name">
+            <option value="Abhay">Abhay Won</option>
+            <option value="Shivi">Shivi Won</option>
+        </select>
+        <input type="number" id="points-input" placeholder="Enter Points">
+        <button class="btn btn-add" onclick="addRound()">➕ Post to Live</button>
+    </div>
+
+    <div id="scoreboard"></div>
+
+    <script>
+        const BUCKET_ID = '374WguNyHK15Cfmpwb8oaj'; 
+        const DB_URL = `https://kvdb.io/${BUCKET_ID}/uno_data`;
+        
+        let gameData = { rounds: [] };
+        let isAdmin = false;
+
+        async function loadData() {
+            try {
+                const response = await fetch(DB_URL);
+                if (response.ok) {
+                    gameData = await response.json();
+                    render();
+                    document.getElementById('status').innerText = "● LIVE UPDATED";
+                }
+            } catch (e) { document.getElementById('status').innerText = "Connecting..."; }
+        }
+
+        async function saveData() {
+            document.getElementById('status').innerText = "Saving...";
+            await fetch(DB_URL, { method: 'POST', body: JSON.stringify(gameData) });
+            document.getElementById('status').innerText = "● LIVE UPDATED";
+            render();
+        }
+
+        function render() {
+            const board = document.getElementById('scoreboard');
+            let aW = 0, aP = 0, sW = 0, sP = 0;
+
+            const tableRows = gameData.rounds.map((r, i) => {
+                if(r.winner === 'Abhay') { aW++; aP += r.pts; } 
+                else { sW++; sP += r.pts; }
+                return `<tr>
+                    <td>${i+1}</td>
+                    <td class="${r.winner === 'Abhay'?'win':''}">${r.winner === 'Abhay'?'WIN':'—'}</td>
+                    <td>${r.winner === 'Abhay'?r.pts:'—'}</td>
+                    <td class="${r.winner === 'Shivi'?'win':''}">${r.winner === 'Shivi'?'WIN':'—'}</td>
+                    <td>${r.winner === 'Shivi'?r.pts:'—'}</td>
+                    ${isAdmin ? `<td><button onclick="deleteRound(${i})" style="color:red; border:none; background:none;">❌</button></td>` : ''}
+                </tr>`;
+            }).reverse().join('');
+
+            board.innerHTML = `
+                <div class="match-card">
+                    <div class="score-banner">
+                        <div class="player"><h3>Abhay</h3><div class="pts">${aW}W | ${aP}P</div></div>
+                        <div class="player"><h3>Shivi</h3><div class="pts">${sW}W | ${sP}P</div></div>
+                    </div>
+                    <table>
+                        <tr><th>#</th><th>Abhay</th><th>Pts</th><th>Shivi</th><th>Pts</th>${isAdmin?'<th>X</th>':''}</tr>
+                        ${tableRows || '<tr><td colspan="5">No rounds yet.</td></tr>'}
+                    </table>
+                </div>`;
+        }
+
+        function login() {
+            const pass = prompt("Password:");
+            if(pass === "uno123") {
+                isAdmin = true;
+                document.getElementById('admin-panel').style.display = 'block';
+                render();
+            }
+        }
+
+        function addRound() {
+            const winner = document.getElementById('winner-name').value;
+            const pts = parseInt(document.getElementById('points-input').value);
+            if(!pts) return;
+            gameData.rounds.push({ winner, pts });
+            document.getElementById('points-input').value = "";
+            saveData();
+        }
+
+        function deleteRound(index) {
+            if(confirm("Delete?")) { gameData.rounds.splice(index, 1); saveData(); }
+        }
+
+        setInterval(loadData, 10000);
+        loadData();
+    </script>
+</body>
+</html>
